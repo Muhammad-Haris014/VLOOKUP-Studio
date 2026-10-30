@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.claude/
+pytest-cache-files-*/
+
+# Secrets and patient data must never be committed
+.streamlit/secrets.toml
+*.xlsx
+*.xlsm
+*.xls
+*.csv

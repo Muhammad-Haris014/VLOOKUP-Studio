@@ -1,0 +1,24 @@
+[theme]
+base = "light"
+primaryColor = "#2563EB"
+backgroundColor = "#F8FAFC"
+secondaryBackgroundColor = "#EEF2F7"
+textColor = "#0F172A"
+borderColor = "#E2E8F0"
+baseRadius = "medium"
+
+[server]
+maxUploadSize = 200
+headless = true
+runOnSave = false
+fileWatcherType = "none"
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+
+[logger]
+level = "info"
