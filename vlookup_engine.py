@@ -277,13 +277,39 @@ def suggest_lookup_sheet(target_name: str, lookup_names: list[str]) -> str | Non
     return None
 
 
+_SERVICE_DATE = re.compile(r"\b(DOS|DATE OF SERVICE|SERVICE DATE|VISIT DATE)\b")
+
+
 def suggest_keys(target: Sheet, lookup: Sheet) -> list[str]:
     common = [h for h in target.headers if lookup.column_index(h) is not None]
-    preferred = [h for h in common if header_key(h) in ("PATIENT NAME", "DOB")]
-    if preferred:
-        return preferred
     ids = [h for h in common if re.search(r"\b(MRN|ID|ACCOUNT|ACCT)\b", header_key(h))]
-    return ids[:1] or common[:1]
+    names = [h for h in common if header_key(h) == "PATIENT NAME"]
+    births = [h for h in common if re.search(r"\b(DOB|DATE OF BIRTH|BIRTH DATE)\b", header_key(h))]
+    # A patient ID is the most reliable key; otherwise name + date of birth, like the MIPS sheets.
+    preferred = ids[:1] or names[:1] + births[:1] or common[:1]
+    extra = suggest_extra_key(target, lookup, preferred)
+    if extra and duplicate_keys(lookup, preferred) > duplicate_keys(lookup, preferred + [extra]):
+        preferred = preferred + [extra]  # a patient with several visits: the date of service makes rows unique
+    return preferred
+
+
+def suggest_extra_key(target: Sheet, lookup: Sheet, keys: list[str]) -> str | None:
+    """A date-of-service column (in both sheets, not yet a key) that can make repeated keys unique."""
+    chosen = {header_key(k) for k in keys}
+    for h in target.headers:
+        if header_key(h) not in chosen and _SERVICE_DATE.search(header_key(h)) and lookup.column_index(h) is not None:
+            return h
+    return None
+
+
+def duplicate_keys(sheet: Sheet, headers: list[str], opts: Options | None = None) -> int:
+    """How many key values appear on more than one row of the sheet."""
+    columns = [sheet.column_index(h) for h in headers]
+    if not columns or None in columns:
+        return 0
+    opts = opts or Options()
+    counts = Counter(k for k in (_row_key(r, columns, opts) for r in sheet.rows) if k is not None)
+    return sum(1 for n in counts.values() if n > 1)
 
 
 def suggest_return_columns(target: Sheet, lookup: Sheet) -> list[str]:

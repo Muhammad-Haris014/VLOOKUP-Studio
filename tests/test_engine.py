@@ -149,6 +149,24 @@ def test_bad_files_give_friendly_errors(data, message):
         ve.read_workbook(data)
 
 
+def test_repeated_id_gets_date_of_service_added_to_key():
+    headers = ["DATE OF SERVICE", "PAT ID", "Status"]
+    visits = [[dt.datetime(2026, 1, 5), "A1", "PM"], [dt.datetime(2026, 2, 9), "A1", "PNM"],
+              [dt.datetime(2026, 3, 1), "B2", "PM"]]
+    lookup = ve.read_workbook(workbook({"191": [headers] + visits}))["191"]
+    new_visit = [dt.datetime(2026, 4, 2), "A1"]
+    target = ve.read_workbook(workbook({"191": [headers[:2]] + [v[:2] for v in visits] + [new_visit]}))["191"]
+
+    assert ve.duplicate_keys(lookup, ["PAT ID"]) == 1
+    assert ve.suggest_keys(target, lookup) == ["PAT ID", "DATE OF SERVICE"]
+
+    by_id = ve.run_job(target, lookup, ve.SheetJob("191", "191", [("PAT ID", "PAT ID")], ["Status"]), ve.Options())
+    assert not by_id.counts_match  # the new visit copies an old visit's status, as Excel VLOOKUP would
+    keys = [("PAT ID", "PAT ID"), ("DATE OF SERVICE", "DATE OF SERVICE")]
+    by_visit = ve.run_job(target, lookup, ve.SheetJob("191", "191", keys, ["Status"]), ve.Options())
+    assert by_visit.counts_match and by_visit.counts[ve.NOT_FOUND] == 1
+
+
 def test_suggestions(lookup_bytes):
     target = ve.read_workbook(workbook({"001": target_rows()}))["001"]
     lookup = ve.read_workbook(lookup_bytes)["001"]

@@ -214,6 +214,11 @@ def apply_to_all(source: str, others: list[tuple[str, list[str], list[str]]]) ->
 
 sign_in_gate()
 
+def add_key(prefix: str, setting: str, column: str) -> None:
+    ss = st.session_state
+    ss[f"{prefix}::{setting}"] = [*ss[f"{prefix}::{setting}"], column]
+
+
 # --------------------------------------------------------------------------- sidebar
 
 with st.sidebar:
@@ -489,6 +494,25 @@ for tab, (t_name, l_name) in zip(tabs, pairs):
                 else:
                     st.caption("Pick the columns to join.")
 
+            on_unique = make_unique and match_on_unique and uk_cols
+            effective = list(uk_cols) if on_unique else [lk for _, lk in key_pairs]
+            repeated = ve.duplicate_keys(lookup, effective, opts)
+            if repeated:
+                extra = ve.suggest_extra_key(target, lookup, effective)
+                st.warning(
+                    f"**Key not unique:** {repeated:,} value(s) of **{' + '.join(effective)}** appear on more than one "
+                    f"row of lookup sheet **{l_name}** (e.g. one patient with several visits). Like Excel VLOOKUP, every "
+                    "row gets the FIRST match, so new visits get an old visit's value and the counts will differ."
+                    + (f" Add **{extra}** to the key to match each visit exactly." if extra else
+                       " Add another column (e.g. date of service) to the key."),
+                    icon=":material/warning:",
+                )
+                if extra:
+                    st.button(
+                        f"Add {extra} to the key", key=f"{p}::addkey", icon=":material/add:",
+                        on_click=add_key, args=(p, "ukcols" if on_unique else "keys", extra),
+                    )
+
         with right, st.container(border=True):
             st.markdown("**:material/output: Columns to fill**")
             ret = st.multiselect(
@@ -616,7 +640,13 @@ if last and last["sig"] == sig:
     st.write("")
     mismatched = [r for r in results if not r.counts_match]
     if mismatched:
-        lines = "\n".join(f"- **{r.job.target_sheet}**: " + "; ".join(r.count_problems()) for r in mismatched)
+        lines = "\n".join(
+            f"- **{r.job.target_sheet}**: " + "; ".join(r.count_problems())
+            + (f". *Likely cause: the key repeats in the lookup sheet ({r.lookup_duplicate_keys:,} values), "
+               "so several rows were filled from the same lookup row. Add the date of service to the key.*"
+               if r.lookup_duplicate_keys else "")
+            for r in mismatched
+        )
         st.error(
             f"**Count check: the counts are NOT the same in both files** "
             f"({len(mismatched)} of {len(results)} sheets).\n\n{lines}\n\n"
